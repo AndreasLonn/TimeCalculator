@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TimeCalculator</title>
+    <style>
+        :root {
+            color-scheme: light dark;
+        }
+
+        #list-time {
+            margin: 0;
+            padding: 0;
+            list-style: none;
+            gap: 0.5em;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #list-time > li {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5em;
+        }
+        #list-time > li:first-child::before {
+            content: 'Start time:';
+        }
+        #list-time > li::after {
+            content: attr(data-test);
+        }
+
+        #list-time input:valid {
+            outline: 1px solid green;
+        }
+        #list-time input:not(:valid) {
+            outline: 1px solid red;
+        }
+
+        #stats {
+            display: flex;
+            flex-direction: column;
+        }
+        #stats label {
+            display: flex;
+            flex-direction: column;
+            width: max-content;
+        }
+    </style>
+</head>
+<body>
+    <template id="template-item-time">
+        <li>
+            <div>
+                <input type="text" pattern="[0-9]+:[0-9]{2}:[0-9]{2}.[0-9]{3}" value="00:00:00.000">
+                <button type="button" class="btn-rem">Remove</button>
+            </div>
+            <span></span>
+        </li>
+    </template>
+
+    <noscript>
+        <h2>This tool does not work without JavaScript. Please enable it.</h2>
+    </noscript>
+    <main>
+        <h1></h1>
+        <ol id="list-time"></ol>
+        <button id="btn-add" type="button">+</button>
+        <div id="stats">
+            <h2>Stats</h2>
+            <label id="stats-length">
+                Length
+                <input type="text" readonly>
+            </label>
+            <label id="stats-json">
+                JSON
+                <textarea readonly></textarea>
+            </label>
+            <label id="stats-json-input">
+                JSON input
+                <textarea>[85980.233,230.767,189]</textarea>
+                <button type="button">Update</button>
+            </label>
+        </div>
+    </main>
+    <script>
+        function q(elem, parent=document) { return parent.querySelector(elem); }
+        function qs(elems, parent=document) { return parent.querySelectorAll(elems); }
+
+        function format(val) {
+            function formatNum(num, type) {
+                let outputLength = 0;
+                let value = 0;
+
+                switch(type) {
+                    case 'h':
+                        outputLength = 2;
+                        value = Math.floor(num / (60 * 60));
+                        break;
+                    case 'm':
+                        outputLength = 2;
+                        value = Math.floor((num / 60) % 60);
+                        break;
+                    case 's':
+                        outputLength = 2;
+                        value = Math.floor(num % 60);
+                        break;
+                    case 'ms':
+                        outputLength = 3;
+                        value = Math.floor((num * 1000) % 1000);
+                        break;
+
+                    default: throw `Unknown type: "${type}"`;
+                }
+
+                const len = Math.max(Math.floor(Math.log10(value) + 1), 1);
+
+                const charsToAdd = outputLength - len;
+
+                if(charsToAdd <= 0) return value;
+
+                return Array(outputLength - len + 1).join('0') + value;
+            }
+
+            return `${formatNum(val, 'h')}:${formatNum(val, 'm')}:${formatNum(val, 's')}.${formatNum(val, 'ms')}`;
+        }
+
+        let templateItemTime = q('template#template-item-time').content.firstElementChild;
+        let timeList = q('#list-time');
+        let buttonAdd = q('#btn-add');
+        let statsLength = q('#stats-length input');
+        let statsJson = q('#stats-json textarea');
+        let statsJsonInput = q('#stats-json-input textarea');
+        let statsJsonInputButton = q('#stats-json-input button');
+
+        function updateTimes() {
+            let startTime = -1;
+            let total = 0;
+
+            let isAllValid = true;
+
+            let values = [];
+
+            qs('li', timeList).forEach(elem => {
+                const elemInput = q('input', elem);
+
+                if(!elemInput.checkValidity()) {
+                    isAllValid = false;
+                    return;
+                }
+
+                const h_m_sms = elemInput.value.split(':');
+                const s_ms = h_m_sms[2].split('.');
+
+                const h = Number(h_m_sms[0]);
+                const m = Number(h_m_sms[1]);
+                const s = Number(s_ms[0]);
+                const ms = Number(s_ms[1]);
+
+                const val = Number(h * 60 * 60 + m * 60 + s + ms / 1000);
+
+                if(startTime < 0) startTime = val;
+
+                total += val;
+
+                elem.dataset['test'] = format(total);
+
+                values.push(val);
+            });
+
+            statsLength.value = isAllValid ? format(total - startTime) : 'Invalid';
+
+            statsJson.value = JSON.stringify(values, space=4);
+        }
+
+        buttonAdd.addEventListener('click', event => {
+            event.preventDefault();
+
+            const newElem = templateItemTime.cloneNode(true);
+
+            timeList.appendChild(newElem);
+
+            updateTimes();
+        });
+
+        timeList.addEventListener('input', event => {
+            event.preventDefault();
+
+            updateTimes();
+        });
+
+        timeList.addEventListener('click', event => {
+            if(event.target.closest('.btn-rem') == null) return;
+
+            event.preventDefault();
+
+            event.target.closest('li').remove();
+
+            updateTimes();
+        });
+
+        statsJsonInputButton.addEventListener('click', event => {
+            event.preventDefault();
+
+            const newData = JSON.parse(statsJsonInput.value);
+
+            const newElems = [];
+
+            newData.forEach(time => {
+                const newElem = templateItemTime.cloneNode(true);
+
+                q('input', newElem).value = format(time);
+
+                newElems.push(newElem);
+            });
+
+            timeList.replaceChildren(...newElems);
+
+            updateTimes();
+        });
+    </script>
+</body>
+</html>
